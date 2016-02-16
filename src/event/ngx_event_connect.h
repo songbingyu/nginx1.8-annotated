@@ -33,7 +33,7 @@ typedef void (*ngx_event_save_peer_session_pt)(ngx_peer_connection_t *pc,
     void *data);
 #endif
 
-
+//·Ç×èÈûÁ¬½Ó
 struct ngx_peer_connection_s {
     ngx_connection_t                *connection;
 
