@@ -24,7 +24,7 @@ ngx_aio_read_chain(ngx_connection_t *c, ngx_chain_t *cl, off_t limit)
     }
 
     total = 0;
-
+	// 循环读取数据到ngx_chain_t 
     while (cl) {
 
         /* we can post the single aio operation only */
@@ -37,6 +37,7 @@ ngx_aio_read_chain(ngx_connection_t *c, ngx_chain_t *cl, off_t limit)
         prev = cl->buf->last;
         size = 0;
 
+		// 合并相邻BUF
         /* coalesce the neighbouring bufs */
 
         while (cl && prev == cl->buf->last) {

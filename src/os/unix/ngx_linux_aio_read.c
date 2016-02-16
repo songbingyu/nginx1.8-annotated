@@ -92,7 +92,7 @@ ngx_file_aio_read(ngx_file_t *file, u_char *buf, size_t size, off_t offset,
 
         return NGX_ERROR;
     }
-
+	/***设置iocb结构，注意aio->aiocb.aio_flags与aio->aiocb.aio_resfd这两个成员***/
     ngx_memzero(&aio->aiocb, sizeof(struct iocb));
 
     aio->aiocb.aio_data = (uint64_t) (uintptr_t) ev;
@@ -101,6 +101,7 @@ ngx_file_aio_read(ngx_file_t *file, u_char *buf, size_t size, off_t offset,
     aio->aiocb.aio_buf = (uint64_t) (uintptr_t) buf;
     aio->aiocb.aio_nbytes = size;
     aio->aiocb.aio_offset = offset;
+	/*当IOCB_FLAG_RESFD标识被设置时就使用aio->aiocb.aio_resfd变量中的描述符中通知用户态I/O事件已完成*/
     aio->aiocb.aio_flags = IOCB_FLAG_RESFD;
     aio->aiocb.aio_resfd = ngx_eventfd;
 

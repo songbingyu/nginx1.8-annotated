@@ -33,6 +33,7 @@ char           **ngx_os_argv;
 ngx_int_t        ngx_process_slot;
 ngx_socket_t     ngx_channel;
 ngx_int_t        ngx_last_process;
+// 全局的进程表，保存了存活的子进程
 ngx_process_t    ngx_processes[NGX_MAX_PROCESSES];
 
 
@@ -89,18 +90,21 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
 {
     u_long     on;
     ngx_pid_t  pid;
+	// 表示将要fork的子进程在ngx_processes中的位置
     ngx_int_t  s;
-
+	// 首先，如果传递进来的类型大于0, 则就是已经确定这个进程已经退出，我们就可以直接确定slot。
     if (respawn >= 0) {
         s = respawn;
 
     } else {
+		// 遍历ngx_processess，从而找到空闲的slot，
+		// 从而等会fork完毕后,将子进程信息放入全局进程信息表的相应的s
         for (s = 0; s < ngx_last_process; s++) {
             if (ngx_processes[s].pid == -1) {
                 break;
             }
         }
-
+		// 到达最大进程限制报错。 
         if (s == NGX_MAX_PROCESSES) {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, 0,
                           "no more than %d processes can be spawned",
@@ -109,7 +113,8 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
         }
     }
 
-
+	// 如果类型为NGX_PROCESS_DETACHED，则说明是热代码替换
+	// (热代码替换也是通过这个函数进行处理的)，因此不需要新建socketpair
     if (respawn != NGX_PROCESS_DETACHED) {
 
         /* Solaris 9 still has no AF_LOCAL */
@@ -120,7 +125,7 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
                           "socketpair() failed while spawning \"%s\"", name);
             return NGX_INVALID_PID;
         }
-
+		// 各种参数设定
         ngx_log_debug2(NGX_LOG_DEBUG_CORE, cycle->log, 0,
                        "channel %d:%d",
                        ngx_processes[s].channel[0],
@@ -143,13 +148,14 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
         }
 
         on = 1;
+		// 用于设置或者清除套接字的异步信号(SIGIO)，当为0时清楚异步信号，非0设置异步信号
         if (ioctl(ngx_processes[s].channel[0], FIOASYNC, &on) == -1) {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           "ioctl(FIOASYNC) failed while spawning \"%s\"", name);
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
-
+		// 设置将要在文件描述词fd上接收SIGIO 或 SIGURG事件信号的进程或进程组标识
         if (fcntl(ngx_processes[s].channel[0], F_SETOWN, ngx_pid) == -1) {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           "fcntl(F_SETOWN) failed while spawning \"%s\"", name);
@@ -179,7 +185,7 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
         ngx_processes[s].channel[0] = -1;
         ngx_processes[s].channel[1] = -1;
     }
-
+	// 设置进程在进程表中的slot。  
     ngx_process_slot = s;
 
 
@@ -194,7 +200,9 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
         return NGX_INVALID_PID;
 
     case 0:
+		// 子进程，因此执行传递进来的子进程的函数  
         ngx_pid = ngx_getpid();
+		// 子进程直接调用exit退出了
         proc(cycle, data);
         break;
 
@@ -207,6 +215,8 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
     ngx_processes[s].pid = pid;
     ngx_processes[s].exited = 0;
 
+	// 如果大于0,则说明我们确定了重启的子进程，
+	// 因此下面的初始化使用已死的子进程的就够了
     if (respawn >= 0) {
         return pid;
     }
@@ -305,7 +315,11 @@ ngx_init_signals(ngx_log_t *log)
     return NGX_OK;
 }
 
-
+// 当Nginx进程收到其关注的信号时就会执行相应的回调函数
+// ngx_signal_handler，该函数内的实现逻辑也很简单，
+// 仅仅只是根据其收到的信号对相应的全局变量进行置位操作，
+// 这符合信号处理函数简单快速的一般特点。
+// http://www.lenky.info/archives/2011/09/60
 void
 ngx_signal_handler(int signo)
 {
@@ -449,6 +463,7 @@ ngx_signal_handler(int signo)
 }
 
 
+/* 循环回收 */
 static void
 ngx_process_get_status(void)
 {

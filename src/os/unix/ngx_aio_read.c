@@ -12,7 +12,7 @@
 
 extern int  ngx_kqueue;
 
-
+// “Ï≤ΩIO
 ssize_t
 ngx_aio_read(ngx_connection_t *c, u_char *buf, size_t size)
 {

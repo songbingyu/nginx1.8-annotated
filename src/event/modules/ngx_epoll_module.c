@@ -236,7 +236,7 @@ io_getevents(aio_context_t ctx, long min_nr, long nr, struct io_event *events,
     return syscall(SYS_io_getevents, ctx, min_nr, nr, events, tmo);
 }
 
-
+// http://blog.csdn.net/freeinfor/article/details/16986535
 static void
 ngx_epoll_aio_init(ngx_cycle_t *cycle, ngx_epoll_conf_t *epcf)
 {
@@ -260,19 +260,19 @@ ngx_epoll_aio_init(ngx_cycle_t *cycle, ngx_epoll_conf_t *epcf)
                    "eventfd: %d", ngx_eventfd);
 
     n = 1;
-
+	// 设置描述符为非阻塞  
     if (ioctl(ngx_eventfd, FIONBIO, &n) == -1) {
         ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
                       "ioctl(eventfd, FIONBIO) failed");
         goto failed;
     }
-
+	// 调用SYS_io_setup系统调用建立aio context  
     if (io_setup(epcf->aio_requests, &ngx_aio_ctx) == -1) {
         ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
                       "io_setup() failed");
         goto failed;
     }
-
+	//n gx_epoll_eventfd_handler函数当ngx_eventfd描述符可读时被调用 
     ngx_eventfd_event.data = &ngx_eventfd_conn;
     ngx_eventfd_event.handler = ngx_epoll_eventfd_handler;
     ngx_eventfd_event.log = cycle->log;
@@ -869,7 +869,7 @@ ngx_epoll_eventfd_handler(ngx_event_t *ev)
     struct timespec   ts;
 
     ngx_log_debug0(NGX_LOG_DEBUG_EVENT, ev->log, 0, "eventfd handler");
-
+	// 调用read函数读取已完成的I/O的个数  
     n = read(ngx_eventfd, &ready, 8);
 
     err = ngx_errno;

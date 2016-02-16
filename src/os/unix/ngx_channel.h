@@ -13,11 +13,22 @@
 #include <ngx_core.h>
 #include <ngx_event.h>
 
-
+// ngx_channel_t频道是Nginx master进程与worker进程之间通信的常用工具，
+// 它是使用本机套接字实现的。socketpair方法，用于创建父子进程间使用的套接字
 typedef struct {
+	 // 向worker进程发送的命令  
      ngx_uint_t  command;
+	 /**
+	 * 对应进程的id
+	 */
      ngx_pid_t   pid;
+	 /**
+	 * 对应的进程在ngx_processes数组中的下标
+	 */
      ngx_int_t   slot;
+	 /**
+	 * 文件描述符
+	 */
      ngx_fd_t    fd;
 } ngx_channel_t;
 
