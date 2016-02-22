@@ -37,34 +37,58 @@ typedef struct {
 
 
 typedef struct {
+	/* 缓存查询树的节点 */
     ngx_rbtree_node_t                node;
+	/* LRU 队列中的节点 */
     ngx_queue_t                      queue;
 
     u_char                           key[NGX_HTTP_CACHE_KEY_LEN
                                          - sizeof(ngx_rbtree_key_t)];
-
+	/* 引用计数 */
     unsigned                         count:20;
+	/* 被请求查询到的次数 */
     unsigned                         uses:10;
     unsigned                         valid_msec:10;
+	/*
+	 当后端响应码 >= NGX_HTTP_SPECIAL_RESPONSE , 并且打开了
+	 fastcgi_intercept_errors 配置，同时 fastcgi_cache_valid 配置指令和
+	 error_page 配置指令也对该响应码做了设定 的情部下，该字段记录响应码，
+	 并列的 valid_sec 字段记录该响应码的持续时间。这种 error 节点并不对
+	 应实际的缓存文件。
+	*/
     unsigned                         error:10;
+	/*
+	 该缓存节点是否有对应的缓存文件。新创建的缓存节点或者过期的
+	 error 节点 (参见 error 字段，当 error 不等于 0 时，Nginx 随后也不
+	 会再关心该节点的 exists 字段值) 该字段值为 0。当正常节点 ( error 等
+	 于 0) 的 exists 为 0 时，进入 cache lock 模式。
+	*/
     unsigned                         exists:1;
+	// 缓存内容过期，某个请求正在获取有效的后端响应并更新此缓存
     unsigned                         updating:1;
+	/* 正在被清理中 */
     unsigned                         deleting:1;
                                      /* 11 unused bits */
 
     ngx_file_uniq_t                  uniq;
+	// 缓存节点的可回收时间 (附带缓存内容)。
     time_t                           expire;
+	/*
+	 valid_msec – 缓存内容的过期时间，缓存内容过期后被查询
+	 时会由 ngx_http_file_cache_read 返回 NGX_HTTP_CACHE_STALE ，然后由
+	 fastcgi_cache_use_stale 配置指令决定是否及何种情况下使用过期内容。
+	*/
     time_t                           valid_sec;
     size_t                           body_start;
     off_t                            fs_size;
     ngx_msec_t                       lock_time;
 } ngx_http_file_cache_node_t;
 
-
+// http://www.tuicool.com/articles/QnMNr23
 struct ngx_http_cache_s {
-    ngx_file_t                       file;
+    ngx_file_t                       file;/* 缓存文件描述结构体 */
     ngx_array_t                      keys;
-    uint32_t                         crc32;
+    uint32_t                         crc32/* crc32 of literal key */
     u_char                           key[NGX_HTTP_CACHE_KEY_LEN];
     u_char                           main[NGX_HTTP_CACHE_KEY_LEN];
 
@@ -113,7 +137,11 @@ struct ngx_http_cache_s {
     unsigned                         secondary:1;
 };
 
-
+/*
+    包头结构，存储缓存文件的相关信息(修改时间、缓存 key 的 crc32 值、和用于指明
+	HTTP 响应包头和包体在缓存文件中偏移位置的字段等)
+	[ngx_http_file_cache_header_t]["\nKEY: "][orig_key]["\n"][header][body]
+*/
 typedef struct {
     ngx_uint_t                       version;
     time_t                           valid_sec;
@@ -142,6 +170,7 @@ typedef struct {
 
 
 struct ngx_http_file_cache_s {
+	// sh 维护 LRU 队列和红黑树，以及缓存文件的当前状态
     ngx_http_file_cache_sh_t        *sh;
     ngx_slab_pool_t                 *shpool;
 

@@ -95,7 +95,8 @@ typedef struct {
 
     ngx_uint_t               current;
     ngx_uint_t               max;
-    time_t                   inactive;
+	// inactive表示文件多久不被访问就会从cache中删除
+	time_t                   inactive; 
 } ngx_open_file_cache_t;
 
 

@@ -41,7 +41,8 @@ static ngx_int_t ngx_output_chain_get_buf(ngx_output_chain_ctx_t *ctx,
     off_t bsize);
 static ngx_int_t ngx_output_chain_copy_buf(ngx_output_chain_ctx_t *ctx);
 
-
+// 发送in中的数据， ctx用来保存发送的上下文
+// http://simohayha.iteye.com/blog/662327
 ngx_int_t
 ngx_output_chain(ngx_output_chain_ctx_t *ctx, ngx_chain_t *in)
 {
@@ -64,7 +65,7 @@ ngx_output_chain(ngx_output_chain_ctx_t *ctx, ngx_chain_t *in)
         if (in == NULL) {
             return ctx->output_filter(ctx->filter_ctx, in);
         }
-
+		// 这里说明只有一个chain，并且它的buf不需要复制  
         if (in->next == NULL
 #if (NGX_SENDFILE_LIMIT)
             && !(in->buf->in_file && in->buf->file_last > NGX_SENDFILE_LIMIT)
@@ -223,12 +224,13 @@ ngx_output_chain(ngx_output_chain_ctx_t *ctx, ngx_chain_t *in)
     }
 }
 
-
+// 判断是否需要复制buf 返回1,表示不需要拷贝，否则为需要拷贝 
 static ngx_inline ngx_int_t
 ngx_output_chain_as_is(ngx_output_chain_ctx_t *ctx, ngx_buf_t *buf)
 {
     ngx_uint_t  sendfile;
 
+	// 是否为specialbuf，是的话返回1,也就是不用拷贝  
     if (ngx_buf_special(buf)) {
         return 1;
     }
@@ -239,15 +241,15 @@ ngx_output_chain_as_is(ngx_output_chain_ctx_t *ctx, ngx_buf_t *buf)
         buf->file->thread_ctx = ctx->filter_ctx;
     }
 #endif
-
+	// 如果buf在文件中，并且使用了directio的话，需要拷贝buf  
     if (buf->in_file && buf->file->directio) {
         return 0;
     }
-
+	// sendfile标记  
     sendfile = ctx->sendfile;
 
 #if (NGX_SENDFILE_LIMIT)
-
+	// 如果pos大于sendfile的限制，设置标记为0  
     if (buf->in_file && buf->file_pos >= NGX_SENDFILE_LIMIT) {
         sendfile = 0;
     }
@@ -255,11 +257,12 @@ ngx_output_chain_as_is(ngx_output_chain_ctx_t *ctx, ngx_buf_t *buf)
 #endif
 
     if (!sendfile) {
-
+		// 此时如果buf不在内存中，则我们就需要复制到内存一份。  
         if (!ngx_buf_in_memory(buf)) {
             return 0;
         }
-
+		// 否则设置in_file为0.  
+		buf->in_file = 0
         buf->in_file = 0;
     }
 
@@ -268,11 +271,17 @@ ngx_output_chain_as_is(ngx_output_chain_ctx_t *ctx, ngx_buf_t *buf)
         (void) ngx_output_chain_aio_setup(ctx, buf->file);
     }
 #endif
-
+	// 如果需要内存中有一份拷贝，而并不在内存中，此时返回0，表示需要拷贝
+	// need_in_memory ，这个主要是用于当我们使用sendfile的时候，
+	// nginx并不会将请求文件拷贝到内存中，而有时我们需要操作文件的内容，
+	// 此时我们就需要设置这个标记(设置方法前面初始化有介绍).
+	// 然后我们在body filter就能操作内容了。 
     if (ctx->need_in_memory && !ngx_buf_in_memory(buf)) {
         return 0;
     }
-
+	// 如果需要内存中有拷贝,并且存在于内存中或者mmap中，则返回0.
+	// need_in_temp，
+	// 这个主要是用于把本来就存在于内存中的buf复制一份拷贝出来，这里有用到的模块有charset,也就是编解码 filter. 
     if (ctx->need_in_temp && (buf->memory || buf->mmap)) {
         return 0;
     }

@@ -203,9 +203,9 @@ ngx_open_cached_file(ngx_open_file_cache_t *cache, ngx_str_t *name,
     }
 
     now = ngx_time();
-
+	// 计算hash
     hash = ngx_crc32_long(name->data, name->len);
-
+	// 根据名字查找对应的file对象
     file = ngx_open_file_lookup(cache, name, hash);
 
     if (file) {
@@ -285,7 +285,7 @@ ngx_open_cached_file(ngx_open_file_cache_t *cache, ngx_str_t *name,
 
         of->fd = file->fd;
         of->uniq = file->uniq;
-
+		// 打开文件，保存文件信息
         rc = ngx_open_and_stat_file(name, of, pool->log);
 
         if (rc != NGX_OK && (of->err == 0 || !of->errors)) {
@@ -358,8 +358,10 @@ ngx_open_cached_file(ngx_open_file_cache_t *cache, ngx_str_t *name,
     }
 
 create:
-
+	// max为open_file_cache命令中定义的那个max指令，
+	// 而current也就是当前cache的文件个数
     if (cache->current >= cache->max) {
+		// 如果大于max，则需要强制expire几个元素
         ngx_expire_old_cached_files(cache, 0, pool->log);
     }
 
@@ -424,9 +426,9 @@ update:
     file->created = now;
 
 found:
-
+	// 更新存取时间
     file->accessed = now;
-
+	// 将文件插入到超时队列中
     ngx_queue_insert_head(&cache->expire_queue, &file->queue);
 
     ngx_log_debug5(NGX_LOG_DEBUG_CORE, pool->log, 0,
@@ -436,6 +438,7 @@ found:
     if (of->err == 0) {
 
         if (!of->is_dir) {
+			// 这里很关键，将cln的handler
             cln->handler = ngx_open_file_cleanup;
             ofcln = cln->data;
 
@@ -849,7 +852,7 @@ ngx_open_and_stat_file(ngx_str_t *name, ngx_open_file_info_t *of,
             of->fd = NGX_INVALID_FILE;
             return NGX_ERROR;
         }
-
+		// 判断文件是否被改变
         if (of->uniq == ngx_file_uniq(&fi)) {
             goto done;
         }
@@ -865,7 +868,7 @@ ngx_open_and_stat_file(ngx_str_t *name, ngx_open_file_info_t *of,
             goto done;
         }
     }
-
+	// 否则重新打开
     if (!of->log) {
 
         /*
@@ -1035,15 +1038,17 @@ ngx_close_cached_file(ngx_open_file_cache_t *cache,
     ngx_log_debug5(NGX_LOG_DEBUG_CORE, log, 0,
                    "close cached open file: %s, fd:%d, c:%d, u:%d, %d",
                    file->name, file->fd, file->count, file->uses, file->close);
-
+	// 判断是否需要关闭
     if (!file->close) {
 
         file->accessed = ngx_time();
-
+		// 然后将文件插入到队列头(先remove然后insert)
         ngx_queue_remove(&file->queue);
 
         ngx_queue_insert_head(&cache->expire_queue, &file->queue);
-
+		// 看文件的使用次数是否大于设置的最小次数，
+		// 或者文件的引用技术是否大于0，如果有一个满足，
+		// 则直接返回，因为此时不需要close文件.
         if (file->uses >= min_uses || file->count) {
             return;
         }
@@ -1054,7 +1059,7 @@ ngx_close_cached_file(ngx_open_file_cache_t *cache,
     if (file->count) {
         return;
     }
-
+	// 到达这里说明文件需要被关闭
     if (file->fd != NGX_INVALID_FILE) {
 
         if (ngx_close_file(file->fd) == NGX_FILE_ERROR) {
@@ -1108,19 +1113,20 @@ ngx_expire_old_cached_files(ngx_open_file_cache_t *cache, ngx_uint_t n,
      */
 
     while (n < 3) {
-
+		// 如果队列为空，则直接返回
         if (ngx_queue_empty(&cache->expire_queue)) {
             return;
         }
-
+		// 取出最后一个文件，也就是可能需要被超时的文件
+		// (因为尾部是最长时间没有操作的文件)
         q = ngx_queue_last(&cache->expire_queue);
 
         file = ngx_queue_data(q, ngx_cached_open_file_t, queue);
-
+		// n是控制是强制超时，还是按inactive超时，后一个判断是判断是否超时
         if (n++ != 0 && now - file->accessed <= cache->inactive) {
             return;
         }
-
+		// 如果有超时的，或者需要强制超时，则开始从队列和红黑树中移除
         ngx_queue_remove(q);
 
         ngx_rbtree_delete(&cache->rbtree, &file->node);
@@ -1132,6 +1138,7 @@ ngx_expire_old_cached_files(ngx_open_file_cache_t *cache, ngx_uint_t n,
 
         if (!file->err && !file->is_dir) {
             file->close = 1;
+			// 关闭文件
             ngx_close_cached_file(cache, file, 0, log);
 
         } else {

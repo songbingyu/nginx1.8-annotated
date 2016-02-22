@@ -82,7 +82,8 @@ ngx_module_t  ngx_http_copy_filter_module = {
 
 static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
 
-
+// 根据需求重新复制输出链表中的某些节点
+// 比如将in_file的节点从文件读出并复制到新的节点），
 static ngx_int_t
 ngx_http_copy_filter(ngx_http_request_t *r, ngx_chain_t *in)
 {

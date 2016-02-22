@@ -46,16 +46,16 @@ typedef void (*ngx_path_loader_pt) (void *data);
 
 
 typedef struct {
-    ngx_str_t                  name;
-    size_t                     len;
-    size_t                     level[3];
+	ngx_str_t                  name; // 路径数据字符串  
+    size_t                     len;// 目录长度  
+    size_t                     level[3];// 临时目录的三级目录大小  
 
     ngx_path_manager_pt        manager;
     ngx_path_loader_pt         loader;
     void                      *data;
 
-    u_char                    *conf_file;
-    ngx_uint_t                 line;
+	u_char                    *conf_file; // 该路径的来源的配置文件  
+    ngx_uint_t                 line;//该路径在来源的配置文件中的行数，主要用于记录日志，排查错误
 } ngx_path_t;
 
 
