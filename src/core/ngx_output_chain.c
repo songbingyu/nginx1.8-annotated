@@ -322,7 +322,7 @@ ngx_output_chain_add_copy(ngx_pool_t *pool, ngx_chain_t **chain,
 #endif
 
     ll = chain;
-
+	// skip last
     for (cl = *chain; cl; cl = cl->next) {
         ll = &cl->next;
     }
