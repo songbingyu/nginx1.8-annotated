@@ -26,6 +26,7 @@ ngx_create_temp_buf(ngx_pool_t *pool, size_t size)
 
     /*
      * set by ngx_calloc_buf():
+
      *
      *     b->file_pos = 0;
      *     b->file_last = 0;
@@ -50,12 +51,12 @@ ngx_alloc_chain_link(ngx_pool_t *pool)
     ngx_chain_t  *cl;
 
     cl = pool->chain;
-
+	// 如果cl存在，则直接返回cl
     if (cl) {
         pool->chain = cl->next;
         return cl;
     }
-
+	// 否则才会malloc chain  
     cl = ngx_palloc(pool, sizeof(ngx_chain_t));
     if (cl == NULL) {
         return NULL;
