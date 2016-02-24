@@ -108,7 +108,7 @@ ngx_http_index_handler(ngx_http_request_t *r)
     ngx_http_core_loc_conf_t     *clcf;
     ngx_http_index_loc_conf_t    *ilcf;
     ngx_http_script_len_code_pt   lcode;
-
+	// 末尾不是/，直接跳转到下一阶段
     if (r->uri.data[r->uri.len - 1] != '/') {
         return NGX_DECLINED;
     }
@@ -126,8 +126,10 @@ ngx_http_index_handler(ngx_http_request_t *r)
     name = NULL;
     /* suppress MSVC warning */
     path.data = NULL;
-
+	// indices上默认有一个NGX_HTTP_DEFAULT_INDEX
     index = ilcf->indices->elts;
+	// 循环遍历index配置的文件，如果有该文件，
+	// 则进行内部重定向，从新走NGX_HTTP_SERVER_REWRITE_PHASE
     for (i = 0; i < ilcf->indices->nelts; i++) {
 
         if (index[i].lengths == NULL) {

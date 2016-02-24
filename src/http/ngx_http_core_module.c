@@ -981,7 +981,8 @@ ngx_http_core_find_config_phase(ngx_http_request_t *r,
 
     r->content_handler = NULL;
     r->uri_changed = 0;
-
+	//解析完HTTP{}块后，ngx_http_init_static_location_trees函数会创建一颗三叉树，以加速配置查找。
+	//找到所属的location，并且loc_conf也已经更新了r->loc_conf了。
     rc = ngx_http_core_find_location(r);
 
     if (rc == NGX_ERROR) {
@@ -990,7 +991,7 @@ ngx_http_core_find_config_phase(ngx_http_request_t *r,
     }
 
     clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
-
+	//是否是r在内部重定向，如果是，中断吗
     if (!r->internal && clcf->internal) {
         ngx_http_finalize_request(r, NGX_HTTP_NOT_FOUND);
         return NGX_OK;
@@ -1000,7 +1001,7 @@ ngx_http_core_find_config_phase(ngx_http_request_t *r,
                    "using configuration \"%s%V\"",
                    (clcf->noname ? "*" : (clcf->exact_match ? "=" : "")),
                    &clcf->name);
-
+	// 更新location配置，主要是 r->content_handler = clcf->handler;设置回调从而在content_phrase阶段用这个handler
     ngx_http_update_location_config(r);
 
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
